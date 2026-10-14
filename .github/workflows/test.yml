@@ -1,0 +1,69 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The test license admits the project `sfctestpkg`.
+      - id: build
+        uses: ./build
+        with:
+          license-key: ${{ secrets.STONEFISH_TEST_LICENSE_KEY }}
+          package-dir: tests/sfctestpkg
+
+      - name: Install and import every wheel
+        shell: bash
+        env:
+          PYTHON_VERSIONS: "3.9 3.10 3.11 3.12 3.13 3.14 3.15"
+        run: |
+          set -euo pipefail
+          for v in $PYTHON_VERSIONS; do
+            tag="cp${v//./}"
+            whl=$(ls dist/sfctestpkg-0.1.0-"$tag"-*.whl)
+            uv run --no-project --isolated --python "$v" --with "$whl" \
+              python -c "import sfctestpkg; assert sfctestpkg.answer() == 42"
+          done
+
+      - name: No plaintext source in the wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          for whl in dist/*.whl; do
+            if unzip -p "$whl" | grep -a -q "SFC-TEST-SECRET-MARKER"; then
+              echo "::error::$whl contains plaintext source"
+              exit 1
+            fi
+          done
+
+  no-license:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: build
+        continue-on-error: true
+        uses: ./build
+        with:
+          package-dir: tests/sfctestpkg
+          python-versions: "3.13"
+
+      - name: The build must fail without a license
+        if: steps.build.outcome != 'failure'
+        run: |
+          echo "::error::build succeeded without a license"
+          exit 1

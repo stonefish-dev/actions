@@ -1,0 +1,104 @@
+name: Build protected wheels with Stonefish
+description: >
+  Build Stonefish-protected wheels of a Python project, one per Python version,
+  and check that every wheel is protected.
+author: Stonefish
+
+inputs:
+  license-key:
+    description: >
+      Stonefish license key that lists the project's name. Pass it from a
+      repository secret. If empty, the STONEFISH_LICENSE_KEY environment
+      variable is used.
+    required: false
+    default: ""
+  python-versions:
+    description: >
+      Space-separated Python versions to build wheels for. Protected wheels
+      contain interpreter-specific bytecode, so each version needs its own
+      wheel.
+    required: false
+    default: "3.9 3.10 3.11 3.12 3.13 3.14 3.15"
+  package-dir:
+    description: Directory of the project to build (the one with pyproject.toml).
+    required: false
+    default: "."
+  output-dir:
+    description: Directory the wheels are written to.
+    required: false
+    default: "dist"
+  secret:
+    description: >
+      Optional module-encryption secret as a hex string. The project's
+      bootstrap must supply the same bytes via set_secret() at import time.
+    required: false
+    default: ""
+  stonefish-version:
+    description: >
+      Version specifier for the stonefish build backend and checker, e.g.
+      "==0.8.2".
+    required: false
+    default: ">=0.8"
+
+outputs:
+  wheels:
+    description: Newline-separated paths of the built wheels.
+    value: ${{ steps.build.outputs.wheels }}
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v10
+
+    - id: build
+      shell: bash
+      env:
+        STONEFISH_LICENSE_KEY: ${{ inputs.license-key || env.STONEFISH_LICENSE_KEY }}
+        SF_PYTHON_VERSIONS: ${{ inputs.python-versions }}
+        SF_PACKAGE_DIR: ${{ inputs.package-dir }}
+        SF_OUTPUT_DIR: ${{ inputs.output-dir }}
+        SF_SECRET: ${{ inputs.secret }}
+        SF_VERSION: ${{ inputs.stonefish-version }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$STONEFISH_LICENSE_KEY" ]; then
+          echo "::error::No Stonefish license. Set the license-key input (e.g. from secrets.STONEFISH_LICENSE_KEY)."
+          exit 1
+        fi
+        if [ -n "$SF_SECRET" ]; then
+          echo "::add-mask::$SF_SECRET"
+        fi
+
+        mkdir -p "$SF_OUTPUT_DIR"
+        out="$(cd "$SF_OUTPUT_DIR" && pwd)"
+
+        constraints="$RUNNER_TEMP/stonefish-constraints.txt"
+        echo "stonefish$SF_VERSION" > "$constraints"
+        args=(--wheel --out-dir "$out" --build-constraint "$constraints")
+        if [ -n "$SF_SECRET" ]; then
+          args+=(--config-setting "secret=$SF_SECRET")
+        fi
+
+        for v in $SF_PYTHON_VERSIONS; do
+          echo "::group::Build wheel for Python $v"
+          uv build --python "$v" "${args[@]}" "$SF_PACKAGE_DIR"
+          echo "::endgroup::"
+        done
+
+        {
+          echo "wheels<<EOF"
+          ls "$out"/*.whl
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - shell: bash
+      env:
+        STONEFISH_LICENSE_KEY: ${{ inputs.license-key || env.STONEFISH_LICENSE_KEY }}
+        SF_OUTPUT_DIR: ${{ inputs.output-dir }}
+        SF_VERSION: ${{ inputs.stonefish-version }}
+      run: |
+        set -euo pipefail
+        echo "::group::Check that all wheels are protected"
+        uvx --from "stonefish$SF_VERSION" stonefish check-wheel "$SF_OUTPUT_DIR"
+        echo "::endgroup::"
