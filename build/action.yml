@@ -30,8 +30,9 @@ inputs:
     default: "dist"
   secret:
     description: >
-      Optional module-encryption secret as a hex string. The project's
-      bootstrap must supply the same bytes via set_secret() at import time.
+      Optional module-encryption secret as a hex string. Requires a bootstrap
+      ([tool.stonefish] bootstrap in pyproject.toml) whose
+      unlock(*, build_date) returns the same bytes at import time.
     required: false
     default: ""
   stonefish-version:

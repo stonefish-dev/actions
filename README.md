@@ -64,7 +64,7 @@ to build one while protection is on.
 | `python-versions`   | all supported that the project admits  | Space-separated Python versions to build wheels for. By default 3.9–3.15, minus those `requires-python` excludes. |
 | `package-dir`       | `.`                                    | Directory of the project to build.                                                                           |
 | `output-dir`        | `dist`                                 | Directory the wheels are written to.                                                                         |
-| `secret`            |                                        | Optional module-encryption secret (hex). The bootstrap must supply the same bytes via `set_secret()`.        |
+| `secret`            |                                        | Optional module-encryption secret (hex). Requires a bootstrap (`[tool.stonefish] bootstrap`) whose `unlock(*, build_date)` returns the same bytes. |
 | `stonefish-version` | `>=0.8`                                | Version specifier for the stonefish build backend and checker, e.g. `==0.8.2`.                               |
 
 ### Outputs
