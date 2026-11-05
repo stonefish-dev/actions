@@ -64,7 +64,7 @@ to build one while protection is on.
 | `package-dir`       | `.`                                    | Directory of the project to build.                                                                           |
 | `output-dir`        | `dist`                                 | Directory the wheels are written to.                                                                         |
 | `secret`            |                                        | Optional module-encryption secret (hex). The bootstrap must supply the same bytes via `set_secret()`.        |
-| `stonefish-version` | `>=0.8`                                | Version specifier for the stonefish build backend, e.g. `==0.8.2`.                                           |
+| `stonefish-version` | `>=0.8`                                | Version specifier for the stonefish build backend and checker, e.g. `==0.8.2`.                               |
 
 ### Outputs
 

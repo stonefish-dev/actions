@@ -48,7 +48,8 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: astral-sh/setup-uv@v10
+    # setup-uv publishes no floating major tags after v7; pin a commit.
+    - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
     - id: build
       shell: bash
@@ -70,12 +71,30 @@ runs:
           echo "::add-mask::$SF_SECRET"
         fi
 
-        mkdir -p "$SF_OUTPUT_DIR"
-        out="$(cd "$SF_OUTPUT_DIR" && pwd)"
+        # On Windows, use C:/... paths so that later steps outside of Git
+        # Bash can use the `wheels` output.
+        native() {
+          if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+        }
 
-        constraints="$RUNNER_TEMP/stonefish-constraints.txt"
-        echo "stonefish$SF_VERSION" > "$constraints"
-        args=(--wheel --out-dir "$out" --build-constraint "$constraints")
+        mkdir -p "$SF_OUTPUT_DIR"
+        out="$(native "$(cd "$SF_OUTPUT_DIR" && pwd)")"
+        tmp="$(native "$RUNNER_TEMP")"
+
+        # Resolve stonefish once so that the build backend and the checker
+        # are the same version.
+        pin="$(echo "stonefish$SF_VERSION" | uv pip compile - --no-deps --no-header --no-annotate --quiet)"
+        echo "Using $pin"
+        constraints="$tmp/stonefish-constraints.txt"
+        echo "$pin" > "$constraints"
+
+        # Build into a fresh directory so that only this run's wheels are
+        # checked and reported, not whatever already is in the output dir.
+        staging="$tmp/stonefish-wheels"
+        rm -rf "$staging"
+        mkdir -p "$staging"
+
+        args=(--wheel --out-dir "$staging" --build-constraint "$constraints")
         if [ -n "$SF_SECRET" ]; then
           args+=(--config-setting "secret=$SF_SECRET")
         fi
@@ -86,19 +105,18 @@ runs:
           echo "::endgroup::"
         done
 
+        echo "::group::Check that all wheels are protected"
+        uvx --from "$pin" stonefish check-wheel "$staging"
+        echo "::endgroup::"
+
+        wheels=()
+        for whl in "$staging"/*.whl; do
+          cp -f "$whl" "$out/"
+          wheels+=("$out/$(basename "$whl")")
+        done
+
         {
           echo "wheels<<EOF"
-          ls "$out"/*.whl
+          printf '%s\n' "${wheels[@]}"
           echo "EOF"
         } >> "$GITHUB_OUTPUT"
-
-    - shell: bash
-      env:
-        STONEFISH_LICENSE_KEY: ${{ inputs.license-key || env.STONEFISH_LICENSE_KEY }}
-        SF_OUTPUT_DIR: ${{ inputs.output-dir }}
-        SF_VERSION: ${{ inputs.stonefish-version }}
-      run: |
-        set -euo pipefail
-        echo "::group::Check that all wheels are protected"
-        uvx --from "stonefish$SF_VERSION" stonefish check-wheel "$SF_OUTPUT_DIR"
-        echo "::endgroup::"

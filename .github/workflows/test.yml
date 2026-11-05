@@ -44,7 +44,9 @@ jobs:
         run: |
           set -euo pipefail
           for whl in dist/*.whl; do
-            if unzip -p "$whl" | grep -a -q "SFC-TEST-SECRET-MARKER"; then
+            # grep -c reads all input; grep -q would exit early, SIGPIPE unzip, and
+            # under pipefail turn a match into a false negative.
+            if unzip -p "$whl" | grep -a -c "SFC-TEST-SECRET-MARKER" > /dev/null; then
               echo "::error::$whl contains plaintext source"
               exit 1
             fi
