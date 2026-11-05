@@ -16,9 +16,10 @@ inputs:
     description: >
       Space-separated Python versions to build wheels for. Protected wheels
       contain interpreter-specific bytecode, so each version needs its own
-      wheel.
+      wheel. If empty, every supported version (3.9 to 3.15) that the
+      project's requires-python admits.
     required: false
-    default: "3.9 3.10 3.11 3.12 3.13 3.14 3.15"
+    default: ""
   package-dir:
     description: Directory of the project to build (the one with pyproject.toml).
     required: false
@@ -80,6 +81,46 @@ runs:
         mkdir -p "$SF_OUTPUT_DIR"
         out="$(native "$(cd "$SF_OUTPUT_DIR" && pwd)")"
         tmp="$(native "$RUNNER_TEMP")"
+
+        # By default, build for every supported Python the project admits:
+        # stonefish refuses to build for one its requires-python rules out.
+        if [ -z "${SF_PYTHON_VERSIONS//[[:space:]]/}" ]; then
+          SF_PYTHON_VERSIONS="$(uv run --no-project --isolated --quiet --python ">=3.11" --with packaging python -I - <<'PY'
+        import os
+        import sys
+        import tomllib
+
+        from packaging.specifiers import SpecifierSet
+
+        supported = ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        path = os.path.join(os.environ["SF_PACKAGE_DIR"], "pyproject.toml")
+        with open(path, "rb") as f:
+            spec = tomllib.load(f).get("project", {}).get("requires-python")
+        if spec is None:
+            print(
+                "::warning::No static [project] requires-python in pyproject.toml; "
+                "building for all supported Pythons. Set python-versions to choose.",
+                file=sys.stderr,
+            )
+            print(*supported)
+            sys.exit()
+        # A minor version qualifies if any of its releases does (pip checks
+        # major.minor.micro).
+        specifiers = SpecifierSet(spec)
+        admitted = [
+            v for v in supported
+            if any(specifiers.contains(f"{v}.{micro}", prereleases=True) for micro in range(100))
+        ]
+        if not admitted:
+            sys.exit(
+                f"::error::requires-python {spec!r} admits none of the supported "
+                f"Pythons {', '.join(supported)}."
+            )
+        print(*admitted)
+        PY
+          )"
+        fi
+        echo "Building for Python $SF_PYTHON_VERSIONS"
 
         # Resolve stonefish once so that the build backend and the checker
         # are the same version.

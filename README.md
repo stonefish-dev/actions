@@ -8,7 +8,8 @@ protected.
 
 Protected wheels contain interpreter-specific bytecode, so a wheel built for
 Python 3.13 is tagged `cp313` and only installs there. The action builds all
-supported versions (3.9–3.15) in a single job.
+supported versions (3.9–3.15) that the project's `requires-python` admits, in a
+single job.
 
 ```yaml
 name: release
@@ -60,7 +61,7 @@ to build one while protection is on.
 | Input               | Default                                | Description                                                                                                  |
 | ------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `license-key`       | `$STONEFISH_LICENSE_KEY`               | Stonefish license key that names the project. Pass it from a repository secret.                              |
-| `python-versions`   | `3.9 3.10 3.11 3.12 3.13 3.14 3.15`    | Space-separated Python versions to build wheels for.                                                         |
+| `python-versions`   | all supported that the project admits  | Space-separated Python versions to build wheels for. By default 3.9–3.15, minus those `requires-python` excludes. |
 | `package-dir`       | `.`                                    | Directory of the project to build.                                                                           |
 | `output-dir`        | `dist`                                 | Directory the wheels are written to.                                                                         |
 | `secret`            |                                        | Optional module-encryption secret (hex). The bootstrap must supply the same bytes via `set_secret()`.        |
