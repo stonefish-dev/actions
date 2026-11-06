@@ -60,6 +60,10 @@ builds use it too.
 No sdist is built: an sdist would ship the plain source, and Stonefish refuses
 to build one while protection is on.
 
+uv reads its settings (`uv.toml`, `[tool.uv]`) from where the action runs, the
+repository root, as `uv build <package-dir>` there does, not from
+`package-dir`. Put an index for stonefish, say, at the root.
+
 ### Inputs
 
 | Input               | Default                                | Description                                                                                                  |

@@ -153,6 +153,12 @@ runs:
         PY
         )"
         pin="$(echo "$requirement" | uv pip compile - --no-deps --no-header --no-annotate --quiet)"
+        # A requirement with an environment marker that doesn't hold here
+        # resolves to nothing.
+        if [ -z "$pin" ]; then
+          echo "::error::The stonefish requirement \`$requirement\` resolves to nothing here; drop its environment marker."
+          exit 1
+        fi
         echo "Using $pin"
         constraints="$tmp/stonefish-constraints.txt"
         echo "$pin" > "$constraints"
@@ -165,11 +171,27 @@ runs:
 
         args=(--wheel --out-dir "$staging" --build-constraint "$constraints")
 
+        n=0
         for v in $SF_PYTHON_VERSIONS; do
           echo "::group::Build wheel for Python $v"
           uv build --python "$v" "${args[@]}" "$SF_PACKAGE_DIR"
           echo "::endgroup::"
+          n=$((n + 1))
         done
+
+        # One wheel per Python, each with its own interpreter tag. Fewer means
+        # a build wrote none, or two wrote the same name (e.g. an untagged
+        # py3-none-any); stonefish <= 0.8.0 even passes check-wheel on an
+        # empty directory. (A glob, not find | wc -l: portable to macOS and
+        # Windows.)
+        shopt -s nullglob
+        built=("$staging"/*.whl)
+        shopt -u nullglob
+        if [ "${#built[@]}" -ne "$n" ]; then
+          echo "::error::Expected $n wheels (one per Python: $SF_PYTHON_VERSIONS), but the builds wrote ${#built[@]}:"
+          ls -1 "$staging"
+          exit 1
+        fi
 
         echo "::group::Check that all wheels are protected"
         status=0
