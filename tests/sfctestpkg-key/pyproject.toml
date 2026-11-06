@@ -1,0 +1,12 @@
+[build-system]
+# 0.8.1 is the first to read the encryption key from STONEFISH_ENCRYPTION_KEY.
+requires = ["stonefish>=0.8.1", "setuptools"]
+build-backend = "stonefish.build_meta"
+
+[project]
+name = "sfctestpkg"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[tool.stonefish]
+bootstrap = "_bootstrap.py"

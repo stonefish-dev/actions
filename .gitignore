@@ -1,3 +1,4 @@
 /dist/
+/dist-key/
 *.egg-info/
 /tests/*/build/

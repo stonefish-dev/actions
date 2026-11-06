@@ -52,6 +52,39 @@ jobs:
             fi
           done
 
+  encryption-key:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The test package's bootstrap returns this key (a test key, not a
+      # secret; see tests/sfctestpkg-key/_bootstrap.py). The action fails
+      # unless every wheel is encrypted with a key.
+      - id: build
+        uses: ./build
+        with:
+          license-key: ${{ secrets.STONEFISH_TEST_LICENSE_KEY }}
+          package-dir: tests/sfctestpkg-key
+          output-dir: dist-key
+          encryption-key: 23270f4a153aee54c70b6bfb0571b91d699a46ec3a8cb9c65c5ef669c460fbbc
+
+      - name: Install and import every wheel
+        shell: bash
+        env:
+          PYTHON_VERSIONS: "3.9 3.10 3.11 3.12 3.13 3.14 3.15"
+        run: |
+          set -euo pipefail
+          for v in $PYTHON_VERSIONS; do
+            tag="cp${v//./}"
+            whl=$(ls dist-key/sfctestpkg-0.1.0-"$tag"-*.whl)
+            uv run --no-project --isolated --python "$v" --with "$whl" \
+              python -c "import sfctestpkg; assert sfctestpkg.answer() == 42"
+          done
+
   no-license:
     runs-on: ubuntu-latest
     steps:
