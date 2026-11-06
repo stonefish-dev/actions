@@ -165,8 +165,24 @@ runs:
         done
 
         echo "::group::Check that all wheels are protected"
-        uvx --from "$pin" stonefish check-wheel "$staging"
+        status=0
+        uvx --from "$pin" stonefish check-wheel "$staging" 2>&1 | tee "$tmp/stonefish-check.txt" || status=$?
         echo "::endgroup::"
+
+        # Summarize on the run page, also when the check fails, so that it
+        # shows which wheel is unprotected.
+        {
+          echo "### Stonefish"
+          echo
+          echo "Built with \`$pin\` for Python $SF_PYTHON_VERSIONS."
+          echo
+          echo '```'
+          sed "s|$staging[/\\\\]||" "$tmp/stonefish-check.txt"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$status" -ne 0 ]; then
+          exit "$status"
+        fi
 
         wheels=()
         for whl in "$staging"/*.whl; do
