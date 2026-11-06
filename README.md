@@ -53,6 +53,10 @@ requires = ["stonefish", "setuptools"]
 build-backend = "stonefish.build_meta"
 ```
 
+To pin stonefish, pin it there (e.g. `"stonefish==0.8.2"`): the action builds
+and checks the wheels with the version that requirement resolves to, and local
+builds use it too.
+
 No sdist is built: an sdist would ship the plain source, and Stonefish refuses
 to build one while protection is on.
 
@@ -65,7 +69,6 @@ to build one while protection is on.
 | `package-dir`       | `.`                                    | Directory of the project to build.                                                                           |
 | `output-dir`        | `dist`                                 | Directory the wheels are written to.                                                                         |
 | `secret`            |                                        | Optional module-encryption secret (hex). Requires a bootstrap (`[tool.stonefish] bootstrap`) whose `unlock(*, build_date)` returns the same bytes. |
-| `stonefish-version` | `>=0.8`                                | Version specifier for the stonefish build backend and checker, e.g. `==0.8.2`.                               |
 
 ### Outputs
 

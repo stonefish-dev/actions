@@ -35,12 +35,6 @@ inputs:
       unlock(*, build_date) returns the same bytes at import time.
     required: false
     default: ""
-  stonefish-version:
-    description: >
-      Version specifier for the stonefish build backend and checker, e.g.
-      "==0.8.2".
-    required: false
-    default: ">=0.8"
 
 outputs:
   wheels:
@@ -61,7 +55,6 @@ runs:
         SF_PACKAGE_DIR: ${{ inputs.package-dir }}
         SF_OUTPUT_DIR: ${{ inputs.output-dir }}
         SF_SECRET: ${{ inputs.secret }}
-        SF_VERSION: ${{ inputs.stonefish-version }}
       run: |
         set -euo pipefail
 
@@ -123,9 +116,33 @@ runs:
         fi
         echo "Building for Python $SF_PYTHON_VERSIONS"
 
-        # Resolve stonefish once so that the build backend and the checker
-        # are the same version.
-        pin="$(echo "stonefish$SF_VERSION" | uv pip compile - --no-deps --no-header --no-annotate --quiet)"
+        # Resolve the project's stonefish requirement once, so that the build
+        # backend and the checker are the same version. A pin goes in the
+        # project's [build-system] requires, where local builds see it too.
+        requirement="$(uv run --no-project --isolated --quiet --python ">=3.11" --with packaging python -I - <<'PY'
+        import os
+        import sys
+        import tomllib
+
+        from packaging.requirements import Requirement
+        from packaging.utils import canonicalize_name
+
+        path = os.path.join(os.environ["SF_PACKAGE_DIR"], "pyproject.toml")
+        with open(path, "rb") as f:
+            requires = tomllib.load(f).get("build-system", {}).get("requires", [])
+        for r in map(Requirement, requires):
+            if canonicalize_name(r.name) == "stonefish":
+                print(r)
+                break
+        else:
+            sys.exit(
+                f"::error::{path} doesn't list stonefish in [build-system] requires. "
+                'Use the stonefish build backend: requires = ["stonefish"], '
+                'build-backend = "stonefish.build_meta".'
+            )
+        PY
+        )"
+        pin="$(echo "$requirement" | uv pip compile - --no-deps --no-header --no-annotate --quiet)"
         echo "Using $pin"
         constraints="$tmp/stonefish-constraints.txt"
         echo "$pin" > "$constraints"
