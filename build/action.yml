@@ -28,11 +28,13 @@ inputs:
     description: Directory the wheels are written to.
     required: false
     default: "dist"
-  secret:
+  encryption-key:
     description: >
-      Optional module-encryption secret as a hex string. Requires a bootstrap
-      ([tool.stonefish] bootstrap in pyproject.toml) whose
-      unlock(*, build_date) returns the same bytes at import time.
+      Optional key to encrypt the modules with, as a hex string. Pass it from
+      a repository secret. If empty, the STONEFISH_ENCRYPTION_KEY (or
+      STONEFISH_ENCRYPTION_KEY_FILE) environment variable is used, if set.
+      Requires a bootstrap ([tool.stonefish] bootstrap in pyproject.toml)
+      whose unlock(*, build_date) returns the same bytes at import time.
     required: false
     default: ""
 
@@ -54,7 +56,7 @@ runs:
         SF_PYTHON_VERSIONS: ${{ inputs.python-versions }}
         SF_PACKAGE_DIR: ${{ inputs.package-dir }}
         SF_OUTPUT_DIR: ${{ inputs.output-dir }}
-        SF_SECRET: ${{ inputs.secret }}
+        STONEFISH_ENCRYPTION_KEY: ${{ inputs.encryption-key || env.STONEFISH_ENCRYPTION_KEY }}
       run: |
         set -euo pipefail
 
@@ -62,8 +64,16 @@ runs:
           echo "::error::No Stonefish license. Set the license-key input (e.g. from secrets.STONEFISH_LICENSE_KEY)."
           exit 1
         fi
-        if [ -n "$SF_SECRET" ]; then
-          echo "::add-mask::$SF_SECRET"
+        # stonefish reads the key from the environment. An empty one would be
+        # refused there, so leave it unset when there is none.
+        if [ -n "$STONEFISH_ENCRYPTION_KEY" ]; then
+          echo "::add-mask::$STONEFISH_ENCRYPTION_KEY"
+        else
+          unset STONEFISH_ENCRYPTION_KEY
+        fi
+        encrypted=""
+        if [ -n "${STONEFISH_ENCRYPTION_KEY:-}${STONEFISH_ENCRYPTION_KEY_FILE:-}" ]; then
+          encrypted=1
         fi
 
         # On Windows, use C:/... paths so that later steps outside of Git
@@ -154,9 +164,6 @@ runs:
         mkdir -p "$staging"
 
         args=(--wheel --out-dir "$staging" --build-constraint "$constraints")
-        if [ -n "$SF_SECRET" ]; then
-          args+=(--config-setting "secret=$SF_SECRET")
-        fi
 
         for v in $SF_PYTHON_VERSIONS; do
           echo "::group::Build wheel for Python $v"
@@ -182,6 +189,14 @@ runs:
         } >> "$GITHUB_STEP_SUMMARY"
         if [ "$status" -ne 0 ]; then
           exit "$status"
+        fi
+        # A stonefish that predates STONEFISH_ENCRYPTION_KEY would ignore the
+        # key and build without it: make sure every wheel was encrypted with it.
+        # (One awk, not grep | grep -q: under pipefail, grep -q exiting early
+        # could SIGPIPE the first grep and turn a hit into a pass.)
+        if [ -n "$encrypted" ] && awk '/✔/ && !/encryption-key=yes/ { bad = 1 } END { exit !bad }' "$tmp/stonefish-check.txt"; then
+          echo "::error::An encryption key was given, but not every wheel is encrypted with it. Does $pin read STONEFISH_ENCRYPTION_KEY? Pin a newer stonefish in [build-system] requires."
+          exit 1
         fi
 
         wheels=()
