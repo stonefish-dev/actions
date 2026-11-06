@@ -26,6 +26,8 @@ jobs:
           license-key: ${{ secrets.STONEFISH_TEST_LICENSE_KEY }}
           package-dir: tests/sfctestpkg
 
+      # --managed-python: macOS has a system Python 3.9.6, which
+      # stonefish-runtime (>= 3.9.7) doesn't support.
       - name: Install and import every wheel
         shell: bash
         env:
@@ -35,7 +37,7 @@ jobs:
           for v in $PYTHON_VERSIONS; do
             tag="cp${v//./}"
             whl=$(ls dist/sfctestpkg-0.1.0-"$tag"-*.whl)
-            uv run --no-project --isolated --python "$v" --with "$whl" \
+            uv run --no-project --isolated --managed-python --python "$v" --with "$whl" \
               python -c "import sfctestpkg; assert sfctestpkg.answer() == 42"
           done
 
@@ -72,6 +74,8 @@ jobs:
           output-dir: dist-key
           encryption-key: 23270f4a153aee54c70b6bfb0571b91d699a46ec3a8cb9c65c5ef669c460fbbc
 
+      # --managed-python: macOS has a system Python 3.9.6, which
+      # stonefish-runtime (>= 3.9.7) doesn't support.
       - name: Install and import every wheel
         shell: bash
         env:
@@ -81,7 +85,7 @@ jobs:
           for v in $PYTHON_VERSIONS; do
             tag="cp${v//./}"
             whl=$(ls dist-key/sfctestpkg-0.1.0-"$tag"-*.whl)
-            uv run --no-project --isolated --python "$v" --with "$whl" \
+            uv run --no-project --isolated --managed-python --python "$v" --with "$whl" \
               python -c "import sfctestpkg; assert sfctestpkg.answer() == 42"
           done
 
